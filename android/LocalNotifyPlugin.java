@@ -32,6 +32,8 @@ import android.app.AlarmManager;
 import android.support.v4.app.NotificationCompat;
 import android.app.Notification;
 import android.net.Uri;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 
 import com.tealeaf.EventQueue;
 import com.tealeaf.event.*;
@@ -130,8 +132,19 @@ public class LocalNotifyPlugin extends BroadcastReceiver implements IPlugin {
 		}
 	}
 
+	public class LocalNotificationOpen extends com.tealeaf.event.Event {
+		String noti_type;
+
+		public LocalNotificationOpen(String type) {
+			super("LocalNotificationOpen");
+			this.noti_type = type;
+		}
+	}
+
 	public static void showNotification(Context context, NotificationData info) {
 		int defaults = Notification.DEFAULT_LIGHTS;
+
+		Bitmap icon = BitmapFactory.decodeResource(context.getResources(), context.getResources().getIdentifier("icon", "mipmap", context.getPackageName()));
 
 		info.shown = true;
 
@@ -147,12 +160,16 @@ public class LocalNotifyPlugin extends BroadcastReceiver implements IPlugin {
 
 		NotificationCompat.Builder builder = new NotificationCompat.Builder(context)
 			.setAutoCancel(true)
-			.setSmallIcon(context.getResources().getIdentifier("icon", "drawable", context.getPackageName()))
+			.setSmallIcon(context.getResources().getIdentifier("notifyicon", "drawable", context.getPackageName()))
+			.setLargeIcon(icon)
 			.setContentTitle(info.title)
 			.setContentText(info.text)
 			.setTicker(info.title)
 			.setOnlyAlertOnce(false)
-			.setDefaults(defaults);
+			.setDefaults(defaults)
+			.setStyle(new NotificationCompat.BigTextStyle()
+				.setBigContentTitle(info.title)
+				.bigText(info.text));
 
 		// TODO: Icon and sound
 
@@ -403,11 +420,13 @@ public class LocalNotifyPlugin extends BroadcastReceiver implements IPlugin {
 
 			_launchName = null;
 
-			// If was launched from local notification,
-			if (bundle != null && bundle.containsKey("fromLocalNotify")) {
-				_launchName = bundle.getString("name");
+			Intent intent = activity.getIntent();
+
+			if (intent != null && intent.getExtras().getBoolean("fromLocalNotify")) {
+				_launchName = intent.getExtras().getString("name");
 
 				logger.log("{localNotify} Launched from notification", _launchName);
+				EventQueue.pushEvent(new LocalNotificationOpen(_launchName));
 			}
 		} catch (Exception e) {
 			logger.log("{localNotify} WARNING: Exception while reading create intent:", e);
@@ -422,13 +441,22 @@ public class LocalNotifyPlugin extends BroadcastReceiver implements IPlugin {
 		DeliverPending();
 	}
 
+	public void onFirstRun() {
+	}
+
 	public void onResume() {
 		_active = true;
 		DeliverPending();
 	}
 
+	public void onRenderResume() {
+	}
+
 	public void onPause() {
 		_active = false;
+	}
+
+	public void onRenderPause() {
 	}
 
 	public void onStop() {
@@ -586,6 +614,7 @@ public class LocalNotifyPlugin extends BroadcastReceiver implements IPlugin {
 				final String NAME = intent.getStringExtra("name");
 
 				logger.log("{localNotify} App launched from notification:", NAME);
+				EventQueue.pushEvent(new LocalNotificationOpen(NAME));
 
 				_launchName = NAME;
 			}
